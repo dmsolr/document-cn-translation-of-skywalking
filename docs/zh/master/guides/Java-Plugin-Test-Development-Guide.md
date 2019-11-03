@@ -90,21 +90,28 @@
 
 各个字段描述:
 
-参数| 说明 | 说明
----|---|---
-type | 配置用例镜像类型，可选项:`jvm`、`tomcat` | 必填
-entryService | 测试用例访问接口 | 必填
-healthCheck | 测试用例心跳检查接口 | 必填
-startScript | 测试用例运行脚本，仅`type: jvm`时有效 | 选填，`type: jvm`时必填
-framework | 用例名称 | 必填
-runningMode | 用例运行模式，可选项: <br/>1. `default`(激活[apm-sdk-plugin](https://github.com/apache/skywalking/tree/master/apm-sniffer/apm-sdk-plugin)目录内所有插件)<br/>2. `with_optional`：激活apm-sdk-plugin目录加[apm-sniffer](https://github.com/apache/skywalking/tree/master/apm-sniffer/optional-plugins)目录内指定插件<br/>`3. with_bootstrap`：激活apm-sdk-plugin目录加[bootstrap-plugins](https://github.com/apache/skywalking/tree/master/apm-sniffer/bootstrap-plugins)目录内指定插件| 选填，缺省值为default
-withPlugins | 指定具体可选插件，eg:`apm-spring-annotation-plugin-*.jar` | 选填，`runningMode: with_optional`或`runningMode: with_bootstrap`时必填
-environment | 同`docker-compose#environment`，此处为用例容器配置 | 选填
-depends_on | 同`docker-compose#depends_on`，此处为用例容器配置 | 选填
-dependencies | 同`docker-compose#services`，此处为用例依赖容器配置，且支持`image、links、hostname、environment、depends_on` | 选填
+| 字段 | 描述
+| --- | ---
+| type | 用例镜像类型，可选项: `jvm、tomcat`（必填）
+| entryService | 用例访问接口（必填）
+| healthCheck | 用例健康检查接口（必填）
+| startScript | 用例启动脚本，仅`type=jvm`时有效（选填，`type=jvm`时必填）
+| framework | 用例名称（必填）
+| runningMode | 用例运行模式，可选项:`default`、 `with_optional`、 `with_bootstrap`（选填，缺省值为`default`）
+| withPlugins | 指定具体可选插件，eg:`apm-spring-annotation-plugin-*.jar`（选填，`runningMode=with_optional`或`runningMode=with_bootstrap`时必填）
+| environment | 同`docker-compose#environment`，此处为用例容器配置（选填）
+| depends_on | 同`docker-compose#depends_on`，此处为用例容器配置（选填）
+| dependencies | 同`docker-compose#services`，此处为用例依赖容器配置，且支持`image、links、hostname、environment、depends_on`（选填）
 
 **注意: 且当dependencies不为空时才通过`docker-compose`启动用例**
 
+runningMode可选项描述:
+
+| 可选项 | 描述
+| --- | ---
+| default | 激活[apm-sdk-plugin](https://github.com/apache/skywalking/tree/master/apm-sniffer/apm-sdk-plugin)目录内所有插件
+| with_optional | 激活apm-sdk-plugin目录加[apm-sniffer](https://github.com/apache/skywalking/tree/master/apm-sniffer/optional-plugins)目录内指定插件
+| with_bootstrap | 激活apm-sdk-plugin目录加[bootstrap-plugins](https://github.com/apache/skywalking/tree/master/apm-sniffer/bootstrap-plugins)目录内指定插件
 
 **配置文件格式**
 
