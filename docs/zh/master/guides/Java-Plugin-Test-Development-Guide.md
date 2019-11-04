@@ -510,9 +510,11 @@ bash ./test/pugin/run.sh -f ${scenario_name}
 
 ### 准备提交
 
-在完成调试之后，开始配置JenkinsFile。如下是JenkinsFile的规则和要求，现在我们有三个JenkinsFile用来配置插件测试任务，分别是`jenkinsfile-agent-test`、`jenkinsfile-agent-test-2`和`jenkinsfile-agent-test-3`三个文件。每个文件分成两组，一共6组并行运行。原则上，希望所有的组能够尽可能同时结束，因此用例加在运行时间比较短的分组上即可。
+在完成调试之后，开始配置JenkinsFile。如下是JenkinsFile的规则和要求，现在我们有三个JenkinsFile用来配置插件测试任务，分别是`jenkinsfile-agent-test`、`jenkinsfile-agent-test-2`和`jenkinsfile-agent-test-3`。每个文件分成两组，一共是6组并行执行。原则上，希望所有的组能够尽可能同时结束，因此新增的用例加在运行时间最短的分组上即可。
 
-示例，
+注意，每个测试任务是一个`stage`，将测试用例名称加版本数作为任务名。结构是`${scenario_name} (版本数量)`。最后更新`Test Cases Report`这个步骤的名称中的总版本数。
+
+示例
 
 ```
 stage('Test Cases Report (15)') { # 15=12+3 统计两个分组总共有多少个版本
