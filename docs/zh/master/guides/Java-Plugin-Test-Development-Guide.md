@@ -1,39 +1,40 @@
 [toc]
 
-## 一、环境要求
+## 环境要求
 
 1. MacOS/Linux
 2. jdk 8+
 2. Docker
 3. Docker Compose
 
-## 二、用例镜像说明
+## 用例镜像说明
 
-测试框架提供`JVM-container`和`Tomcat-container`两种类型的镜像。在编写用例时根据实际情况选择适合的镜像，**当两种镜像都适用时建议优先选择`JVM-container`。**
+测试框架提供`JVM-container`和`Tomcat-container`两种类型的镜像。在编写用例时根据实际情况选择适合的镜像，**当两种镜像都适用时优先选择`JVM-container`。**
 
-### I. JVM-container镜像说明
+### JVM-container镜像说明
 
 [JVM-container](https://github.com/apache/skywalking/tree/master/test/plugin/containers/jvm-container)使用`openjdk:8`作为基础镜像。
-需要用例在`mvn package`后生成包含用例jar文件和`startup.sh`脚本且与用例工程同名的zip压缩包。
+需要用例工程在`mvn package`后生成包含用例jar文件和`startup.sh`脚本且与用例工程同名的zip压缩包。
 
 参考用例:
 * [sofarpc-scenario](https://github.com/apache/skywalking/tree/master/test/plugin/scenarios/sofarpc-scenario)
 * [webflux-scenario(包含多个子项目的用例)](https://github.com/apache/skywalking/tree/master/test/plugin/scenarios/webflux-scenario)
 
-### II. Tomcat-container镜像说明
+### Tomcat-container镜像说明
 
-[Tomcat-container](https://github.com/apache/skywalking/tree/master/test/plugin/containers/tomcat-container)使用`tomcat:8.5.42-jdk8-openjdk`作为基础镜像，需要用例在执行`mvn package`后生成与用例同名的war包。
+[Tomcat-container](https://github.com/apache/skywalking/tree/master/test/plugin/containers/tomcat-container)使用`tomcat:8.5.42-jdk8-openjdk`作为基础镜像，
+需要用例工程在执行`mvn package`后生成与用例同名的war包。
 
 参考用例:
 * [spring-4.3.x-scenario](https://github.com/apache/skywalking/tree/master/test/plugin/scenarios/spring-4.3.x-scenario)
 
 
+### 工程目录结构
 
-### III. 工程目录结构
+测试用例是一个独立的Maven工程，并且必须能是打包成war包的web工程，或含有完成java工程的zip包，这由用例选择的镜像类型决定。并要求提供一个外部能够访问的Web服务用例测试调用链追踪的链接和心跳检查的链接。
+这些都需要描述在configuration.yml文件中，关于这个配置文件后面还会继续介绍。
 
-测试用例是一个独立的Maven工程，并且必须能是打包成war包的web工程，或含有完成java工程的zip包，这由用例选择的镜像类型决定。并要求提供一个外部能够访问的Web服务用例测试调用链追踪的链接和心跳检查的链接。这些都需要描述在configuration.yml文件中，关于这个配置文件后面还会继续介绍。
-
-**a. JVM-container类工程目录**
+**JVM-container类工程目录**
 
 ```
 [plugin-scenario]
@@ -53,7 +54,7 @@
 [] = directory
 ```
 
-**b. Tomcat-container类工程目录**
+**Tomcat-container类工程目录**
 
 ```
 [plugin-scenario]
@@ -74,7 +75,7 @@
 [] = directory
 ```
 
-## 三、用例文件说明
+## 用例文件说明
 以下是插件测试用例运行时必要的文件：
 
 文件名 | 用途、说明
@@ -86,7 +87,7 @@
 
 `*`support-version.list是固定格式的，每个版本号为一行，以`#`开始的为无效行。
 
-### I. configuration.yml
+### configuration.yml
 
 各个字段描述:
 
@@ -101,7 +102,7 @@
 | withPlugins | 指定具体可选插件，eg:`apm-spring-annotation-plugin-*.jar`（选填，`runningMode=with_optional`或`runningMode=with_bootstrap`时必填）
 | environment | 同`docker-compose#environment`，此处为用例容器配置（选填）
 | depends_on | 同`docker-compose#depends_on`，此处为用例容器配置（选填）
-| dependencies | 同`docker-compose#services`，此处为用例依赖容器配置，且支持`image、links、hostname、environment、depends_on`（选填）
+| dependencies | 同`docker-compose#services`，此处为用例依赖容器配置，仅支持`image、links、hostname、environment、depends_on`（选填）
 
 **注意: 且当dependencies不为空时才通过`docker-compose`启动用例**
 
@@ -156,9 +157,9 @@ dependencies:
 * [gateway with runningMode](https://github.com/apache/skywalking/blob/master/test/plugin/scenarios/gateway-scenario/configuration.yml)
 * [canal with docker-compose](https://github.com/apache/skywalking/blob/master/test/plugin/scenarios/canal-scenario/configuration.yml)
 
-### II. expectedData.yaml
+### expectedData.yaml
 
-#### a. 字段描述符以及检查项说明
+#### 字段描述符以及检查项说明
 
 **数字型字段校验描述符**
 
@@ -290,9 +291,9 @@ segments:
 | parentServiceName | 调用端的SpanID等于0的OperationName 
 | entryApplicationInstanceId | 调用链入口的实例ID。 
 
-#### b. 编写期望数据流程
+#### 编写期望数据流程
 
-##### 1. 编写RegistryItems
+##### 编写RegistryItems
 
 HttpClient测试用例中运行在Tomcat容器中，所以httpclient的实例数为1, 并且applicationId不为0。HttpClient Span的OperationName和ContextPropagateServlet生成的Span的OperationName一致，所以operationNames中只有两个operationName.
 ```yml
@@ -305,7 +306,7 @@ registryItems:
   - httpclient-case: [/httpclient-case/case/httpclient,/httpclient-case/case/context-propagate]
 ```
 
-##### 2. 编写segmentItems
+##### 编写segmentItems
 
 下面以HttpClient插件为例子，HttpClient插件测试两点: 能否正确的创建HttpClient的Span以及能否正确的传递上下文，基于这两点，设计如下用例：
 
@@ -410,7 +411,7 @@ SegmentB的Span校验数据格式如下：
    - {parentSpanId: 1, parentTraceSegmentId: "${httpclient-case[0]}", entryServiceName: "/httpclient-case/case/httpclient", networkAddress: "127.0.0.1:8080",parentServiceName: "/httpclient-case/case/httpclient",entryApplicationInstanceId: nq 0 }
 ```
 
-### III. startup.sh
+### startup.sh
 
 基础容器为插件测试用例提供运行环境，所以也在测试用例提供必要的环境变量。你可以在你的启动脚本里直接引用如下环境变量：
 
