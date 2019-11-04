@@ -1,4 +1,3 @@
-[toc]
 
 ## 环境要求
 
@@ -29,10 +28,10 @@
 * [spring-4.3.x-scenario](https://github.com/apache/skywalking/tree/master/test/plugin/scenarios/spring-4.3.x-scenario)
 
 
-### 工程目录结构
+## 工程目录结构
 
-测试用例是一个独立的Maven工程，并且必须能是打包成war包的web工程，或含有完成java工程的zip包，这由用例选择的镜像类型决定。并要求提供一个外部能够访问的Web服务用例测试调用链追踪的链接和心跳检查的链接。
-这些都需要描述在configuration.yml文件中，关于这个配置文件后面还会继续介绍。
+测试用例是一个独立的Maven工程，并且必须能是打包成war包的web工程，或含有完整java工程的zip包，这由用例选择的镜像类型决定。并要求提供一个外部能够访问的Web服务用例测试调用链追踪的链接和心跳检查的链接。
+这些都需要描述在`configuration.yml`文件中，关于这个配置文件后面还会继续介绍。
 
 **JVM-container类工程目录**
 
@@ -81,7 +80,7 @@
 文件名 | 用途、说明
 ---|---
 `configuration.yml` | 定义用例的基本信息，如: 被测试框架名称、用例入口、运行模式、第三方依赖服务等
-`expectedData.yaml` | 期望数据文件用来描述用例生成的Segment数据，文件主要包含两部分内容：注册项 和 Segment数据. Segment数据中包含对Span的校验和Segment个数的校验
+`expectedData.yaml` | 期望数据文件用来描述用例生成的Segment数据，文件主要包含两部分内容：注册项和Segment数据。Segment数据中包含对Span的校验和Segment个数的校验（`不检验LocalSpan`）
 `support-version.list` | 描述用例（插件）自动化测试覆盖的版本列表
 `startup.sh` |`JVM-container`镜像用例启动脚本（`Tomcat-container`镜像用例请忽略)
 
@@ -96,7 +95,7 @@
 | type | 用例镜像类型，可选项: `jvm、tomcat`（必填）
 | entryService | 用例访问接口（必填）
 | healthCheck | 用例健康检查接口（必填）
-| startScript | 用例启动脚本，仅`type=jvm`时有效（选填，`type=jvm`时必填）
+| startScript | 用例启动脚本，仅`type: jvm`时有效（选填，`type: jvm`时必填）
 | framework | 用例名称（必填）
 | runningMode | 用例运行模式，可选项:`default`、 `with_optional`、 `with_bootstrap`（选填，缺省值为`default`）
 | withPlugins | 指定具体可选插件，eg:`apm-spring-annotation-plugin-*.jar`（选填，`runningMode=with_optional`或`runningMode=with_bootstrap`时必填）
@@ -113,6 +112,8 @@ runningMode可选项描述:
 | default | 激活[apm-sdk-plugin](https://github.com/apache/skywalking/tree/master/apm-sniffer/apm-sdk-plugin)目录内所有插件
 | with_optional | 激活apm-sdk-plugin目录加[apm-sniffer](https://github.com/apache/skywalking/tree/master/apm-sniffer/optional-plugins)目录内指定插件
 | with_bootstrap | 激活apm-sdk-plugin目录加[bootstrap-plugins](https://github.com/apache/skywalking/tree/master/apm-sniffer/bootstrap-plugins)目录内指定插件
+
+with_optional/with_bootstap支持同时激活多个插件，插件的Jar之间用`;`分隔。
 
 **配置文件格式**
 
@@ -211,7 +212,7 @@ segments:
   segments:
   - segmentId: SEGMENT_ID(string)
     spans:
-        ....
+        ...
 ```
 
 以下对各个校验字段的描述:
@@ -291,24 +292,79 @@ segments:
 | parentServiceName | 调用端的SpanID等于0的OperationName 
 | entryApplicationInstanceId | 调用链入口的实例ID。 
 
-#### 编写期望数据流程
 
-##### 编写RegistryItems
+### startup.sh
 
-HttpClient测试用例中运行在Tomcat容器中，所以httpclient的实例数为1, 并且applicationId不为0。HttpClient Span的OperationName和ContextPropagateServlet生成的Span的OperationName一致，所以operationNames中只有两个operationName.
-```yml
-registryItems:
-  applications:
-  - {httpclient-case: nq 0}
-  instances:
-  - {httpclient-case: 1}
-  operationNames:
-  - httpclient-case: [/httpclient-case/case/httpclient,/httpclient-case/case/context-propagate]
+基础容器为插件测试用例提供运行环境，所以也在测试用例提供必要的环境变量。你可以在你的启动脚本里直接引用如下环境变量：
+
+**环境变量说明列表**
+
+| 变量   | 描述    |
+|:----     |:----        |
+| agent_opts               |        探针参数         |
+| SCENARIO_NAME       |  当前运行用例名称    |
+| SCENARIO_VERSION           | 当前运行用例版本 |
+| SCENARIO_ENTRY_SERVICE             | 当前运行用例入口接口 |
+| SCENARIO_HEALTH_CHECK_URL          | 当前运行用例心跳接口  |
+
+
+> `type: jvm`要求在启动脚本中显式加入`${agent_opts}`，它包含SkyWalking运行时必要的参数。如果需要覆盖它们，请将参数加在`${agent_opts}`之后。
+
+
+框架会自动在用例的启动你还可以在你启动脚本里覆盖如下参数，如`jetty-scenario`和`webflux-scenario`都是一个工程中含有两种用例服务的，因此需要额外指定`agent`的服务名。
+
+示例：
+```bash
+home="$(cd "$(dirname $0)"; pwd)"
+
+java -jar ${agent_opts} "-Dskywalking.agent.service_name=jettyserver-scenario" ${home}/../libs/jettyserver-scenario.jar &
+sleep 1
+
+java -jar ${agent_opts} "-Dskywalking.agent.service_name=jettyclient-scenario"  ${home}/../libs/jettyclient-scenario.jar &
+
 ```
 
-##### 编写segmentItems
+> 但如非必要请匆覆盖`skywalking.agent.service_name`或者其它agent可配置化参数。
 
-下面以HttpClient插件为例子，HttpClient插件测试两点: 能否正确的创建HttpClient的Span以及能否正确的传递上下文，基于这两点，设计如下用例：
+**参考文件**
+* [undertow](https://github.com/apache/skywalking/blob/master/test/plugin/scenarios/undertow-scenario/bin/startup.sh)
+* [webflux](https://github.com/apache/skywalking/blob/master/test/plugin/scenarios/webflux-scenario/webflux-dist/bin/startup.sh)
+
+
+### 编写用例代码
+pom.xml最佳实践:
+1. 测试框架的版本号设置为属性变量
+
+```xml
+    <properties>
+        <!-- 预留此变量以便动态指定版本 -->
+        <test.framework.version>4.3</test.framework.version>
+    </properties>
+    <dependencies>
+        <dependency>
+            <groupId>org.apache.httpcomponents</groupId>
+            <artifactId>httpclient</artifactId>
+            <version>${test.framework.version}</version>
+        </dependency>
+        ...
+    </dependencies>
+
+    <build>
+        <finalName>httpclient-4.3.x-scenario</finalName> <!-- 必须与用例的目录名同名 -->
+        ....
+    </build>
+```
+
+### 如何做心跳检查
+
+心跳检查是为了感知服务的可用状态，即探针已经激活并完成服务注册以及插件已经初始化。建议并推荐，用例在检查心跳时，先做依赖服务的状态验证。在所有依赖服务的状态验证后，若验证通过需返回`HTTP StatusCode=200`。框架以HTTP状态码`200`作为唯一的成功的信号。
+
+注意，由于心跳检查可能会发生多次请求，从而产生多个心跳检查的Segemnt，因此SegmentSize也不再是确定的值（建议使用`ge`符号）。此外，请不要将心跳检查的segment登记在期望数据文件上。
+
+
+### 编写期望数据流程
+
+期望数据文件`expectedData.yaml`主要包含`RegistryItems`和`SegmentIntems`两部分，下面以HttpClient插件为例子对它们分别进行说明，HttpClient插件测试两点: 能否正确的创建HttpClient的Span以及能否正确的传递上下文，基于这两点，设计如下用例：
 
 ```
 +-------------+         +------------------+            +-------------------------+
@@ -333,12 +389,28 @@ registryItems:
       +                           +                                  +
 ```
 
+#### 编写RegistryItems
+
+HttpClient测试用例中运行在Tomcat容器中，所以httpclient的实例数为1, 并且applicationId不为0。HttpClient Span的OperationName和ContextPropagateServlet生成的Span的OperationName一致，所以operationNames中只有两个operationName.
+
+```yml
+registryItems:
+  applications:
+  - {httpclient-case: nq 0}
+  instances:
+  - {httpclient-case: 1}
+  operationNames:
+  - httpclient-case: [/httpclient-case/case/httpclient,/httpclient-case/case/context-propagate] # 此处不需要登记healtcheck
+```
+
+#### 编写segmentItems
+
 根据HttpClient用例的运行流程，推断httpclient-case产生两个Segment. 第一个Segment是访问CaseServlet所产生的, 暂且叫它`SegmentA`。第二Segment是ContextPropagateServlet所产生的, 暂且叫它`SegmentB`.
 
 ```yml
 segments:
   - applicationCode: httpclient-case
-    segmentSize: 2
+    segmentSize: ge 2 # healthcheck可能有多个
 ```
 
 Skywalking支持Tomcat埋点，所以SegmentA中会包含两个Span，第一个Span是Tomcat的埋点，第二个Span是HttpClient的埋点.
@@ -411,86 +483,6 @@ SegmentB的Span校验数据格式如下：
    - {parentSpanId: 1, parentTraceSegmentId: "${httpclient-case[0]}", entryServiceName: "/httpclient-case/case/httpclient", networkAddress: "127.0.0.1:8080",parentServiceName: "/httpclient-case/case/httpclient",entryApplicationInstanceId: nq 0 }
 ```
 
-### startup.sh
-
-基础容器为插件测试用例提供运行环境，所以也在测试用例提供必要的环境变量。你可以在你的启动脚本里直接引用如下环境变量：
-
-**环境变量说明列表**
-
-| 变量   | 描述    |
-|:----     |:----        |
-| agent_opts               |        探针参数         |
-| SCENARIO_NAME       |  当前运行用例名称    |
-| SCENARIO_VERSION           | 当前运行用例版本 |
-| SCENARIO_ENTRY_SERVICE             | 当前运行用例入口接口 |
-| SCENARIO_HEALTH_CHECK_URL          | 当前运行用例心跳接口  |
-
-
-> `type: jvm`要求在启动脚本中显式加入`${agent_opts}`，它包含SkyWalking运行时必要的参数。如果需要覆盖它们，请将参数加在`${agent_opts}`之后。
-
-
-框架会自动在用例的启动你还可以在你启动脚本里覆盖如下参数，如`jetty-scenario`和`webflux-scenario`都是一个工程中含有两种用例服务的，因此需要额外指定`agent`的服务名。
-
-示例：
-```bash
-home="$(cd "$(dirname $0)"; pwd)"
-
-java -jar ${agent_opts} "-Dskywalking.agent.service_name=jettyserver-scenario" ${home}/../libs/jettyserver-scenario.jar &
-sleep 1
-
-java -jar ${agent_opts} "-Dskywalking.agent.service_name=jettyclient-scenario"  ${home}/../libs/jettyclient-scenario.jar &
-
-```
-
-> 但如非必要请匆覆盖`skywalking.agent.service_name`或者其它agent可配置化参数。
-
-**参考文件**
-* [undertow](https://github.com/apache/skywalking/blob/master/test/plugin/scenarios/undertow-scenario/bin/startup.sh)
-* [webflux](https://github.com/apache/skywalking/blob/master/test/plugin/scenarios/webflux-scenario/webflux-dist/bin/startup.sh)
-
-
-### 编写用例代码
-pom.xml最佳实践:
-1. 测试框架的版本号设置为属性变量
-```xml
-<test.framework.version>9.0.0.v20130308</test.framework.version>
-
-<dependency>
-    <groupId>org.apache.httpcomponents</groupId>
-    <artifactId>httpclient</artifactId>
-    <version>${test.framework.version}</version>
-</dependency>
-```
-具体请参考[配置]
-
-
-### 如何做心跳检查
-
-心跳检查是为了感知服务的可用状态，即探针已经激活并完成服务注册以及插件已经初始化。建议并推荐，用例在检查心跳时，先做依赖服务的状态验证。在所有依赖服务的状态验证后，若验证通过需返回`HTTP StatusCode=200`。框架以HTTP状态码`200`作为唯一的成功的信号。
-
-
-> 注意，由于心跳检查可能会发生多次请求，从而产生多个心跳检查的Segemnt，因此SegmentSize也不再是确定的值（建议使用`ge`符号）。此外，请不要将心跳检查的segment登记在期望数据文件上。
-
-例如：
-```yaml
-registryItems:
-  applications:
-    - {canal-scenario: 2}
-  instances:
-    - {canal-scenario: 1}
-  operationNames:
-    - canal-scenario: [Canal/example, /canal-scenario/case/canal-case]
-  heartbeat: []
-segmentItems:
-  - applicationCode: canal-scenario
-    segmentSize: ge 2
-    segments:
-      - segmentId: not null
-        spans:
-          - operationName: Canal/example
-...
-```
-
 ## 本地测试和准备提交
 
 
@@ -508,11 +500,9 @@ bash ./test/pugin/run.sh -f ${scenario_name}
 可以通过`${SKYWALKING_HOME}/test/plugin/run.sh -h`了解其所有用法，
 
 
+在完成调试之后，确定的配置JenkinsFile后可以准备发起PR。
 
-
-### 准备提交
-
-在完成调试之后，开始配置JenkinsFile。如下是JenkinsFile的规则和要求，现在我们有三个JenkinsFile用来配置插件测试任务，分别是`jenkinsfile-agent-test`、`jenkinsfile-agent-test-2`和`jenkinsfile-agent-test-3`。每个文件分成两组，一共是6组并行执行。原则上，希望所有的组能够尽可能同时结束，因此新增的用例加在运行时间最短的分组上即可。
+如下是JenkinsFile的规则和要求，现在我们有三个JenkinsFile用来配置插件测试任务，分别是`jenkinsfile-agent-test`、`jenkinsfile-agent-test-2`和`jenkinsfile-agent-test-3`。每个文件分成两组，一共是6组并行执行。原则上，希望所有的组能够尽可能同时结束，因此新增的用例加在运行时间最短的分组上即可。
 
 注意，每个测试任务是一个`stage`，将测试用例名称加版本数作为任务名。结构是`${scenario_name} (版本数量)`。最后更新`Test Cases Report`这个步骤的名称中的总版本数。
 
@@ -521,7 +511,7 @@ bash ./test/pugin/run.sh -f ${scenario_name}
 ```
 stage('Test Cases Report (15)') { # 15=12+3 统计两个分组总共有多少个版本
     steps {
-        echo "reserve."
+        echo "Test Cases Report"
     }
 }
 
