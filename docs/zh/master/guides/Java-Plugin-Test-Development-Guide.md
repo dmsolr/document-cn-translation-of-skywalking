@@ -33,6 +33,8 @@
 测试用例是一个独立的Maven工程，并且必须能是打包成war包的web工程，或含有完整java工程的zip包，这由用例选择的镜像类型决定。并要求提供一个外部能够访问的Web服务用例测试调用链追踪的链接和心跳检查的链接。
 这些都需要描述在`configuration.yml`文件中，关于这个配置文件后面还会继续介绍。
 
+插件测试用例的代码请放在`org.apache.skywalking.apm.testcase.*`包下面，但用例中出现需要增加的类时，可以将用例的所有代码移到`test.org.apache.skywalking.apm.testcase.*`包下面。
+
 **JVM-container类工程目录**
 
 ```
@@ -80,7 +82,7 @@
 文件名 | 用途、说明
 ---|---
 `configuration.yml` | 定义用例的基本信息，如: 被测试框架名称、用例入口、运行模式、第三方依赖服务等
-`expectedData.yaml` | 期望数据文件用来描述用例生成的Segment数据，文件主要包含两部分内容：注册项和Segment数据。Segment数据中包含对Span的校验和Segment个数的校验（`不检验LocalSpan`）
+`expectedData.yaml` | 期望数据文件用来描述用例生成的Segment数据，文件主要包含两部分内容：注册项和Segment数据。Segment数据中包含对Span的校验和Segment个数的校验
 `support-version.list` | 描述用例（插件）自动化测试覆盖的版本列表
 `startup.sh` |`JVM-container`镜像用例启动脚本（`Tomcat-container`镜像用例请忽略)
 
@@ -200,7 +202,7 @@ registryItems:
 | --- | ---
 | applications | 注册的Aplication_code和application Id映射关系.目前只需校验不为0即可
 | instances | Application生成的实例数
-| operationNames | 所有预期生成Span的OperationName列表（LocalSpan不校验）
+| operationNames | 所有预期生成Span的OperationName列表（LocalSpan不需要登记）
 
 
 **Segments数据校验格式**
@@ -400,7 +402,7 @@ registryItems:
   instances:
   - {httpclient-case: 1}
   operationNames:
-  - httpclient-case: [/httpclient-case/case/httpclient,/httpclient-case/case/context-propagate] # 此处不需要登记healtcheck
+  - httpclient-case: [/httpclient-case/case/httpclient,/httpclient-case/case/context-propagate] # 此处不需要登记healtcheck和LocalSpan
 ```
 
 #### 编写segmentItems
@@ -500,7 +502,7 @@ bash ./test/pugin/run.sh -f ${scenario_name}
 可以通过`${SKYWALKING_HOME}/test/plugin/run.sh -h`了解其所有用法，
 
 
-在完成调试之后，确定的配置JenkinsFile后可以准备发起PR。
+在本地调试之后成功，正确的配置JenkinsFile后可以发起Pull Request。
 
 如下是JenkinsFile的规则和要求，现在我们有三个JenkinsFile用来配置插件测试任务，分别是`jenkinsfile-agent-test`、`jenkinsfile-agent-test-2`和`jenkinsfile-agent-test-3`。每个文件分成两组，一共是6组并行执行。原则上，希望所有的组能够尽可能同时结束，因此新增的用例加在运行时间最短的分组上即可。
 
