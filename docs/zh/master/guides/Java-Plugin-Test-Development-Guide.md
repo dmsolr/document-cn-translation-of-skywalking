@@ -193,6 +193,7 @@ registryItems:
 ```
 
 以下对各个校验字段的描述:
+
 | 字段 | 描述
 | --- | ---
 | applications | 注册的Aplication_code和application Id映射关系.目前只需校验不为0即可
