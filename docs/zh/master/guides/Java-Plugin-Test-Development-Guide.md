@@ -131,13 +131,24 @@ dependencies:
   service1:
     image:
     hostname: 
+    expose:
+      ...
     environment:
       ...
     depends_on:
       ...
     links:
       ...
+    entrypoint:
+      ...
+    healthcheck:
+      ...
 ```
+
+* dependencies支持healthcheck配置，但它所有子项需要以字符串形式表示。
+* 如果第三依赖的服务需要与插件的版本一致时，可以${CASE_SERVER_IMAGE_VERSION}在运行时会替换为${test.framework.version}（用例测试插件的版本号）。
+
+> 不支持资源相关配置项，如volumes，ports和ulimits。（当然我们完全不需要向容器的任何端口映射到宿主机上，也不需要额外在挂载目录，所以不支持这些配置。）
 
 **参考示例**
 * [dubbo-2.7.x with JVM-container](https://github.com/apache/skywalking/blob/master/test/plugin/scenarios/dubbo-2.7.x-scenario/configuration.yml)
@@ -151,20 +162,20 @@ dependencies:
 
 **数字型字段校验描述符**
 
-| 描述符  | 描述               |
-| :---     | :---               |
-| `nq`     | 不等于             |
-| `eq`     | 等于，默认可以不写 |
-| `ge`     | 大于等于           |
-| `gt`     | 大于               |
+| 描述符 | 描述 |
+| :--- | :--- |
+| `nq` | 不等于 |
+| `eq` | 等于，默认可以不写 |
+| `ge` | 大于等于 |
+| `gt` | 大于 |
 
 **字符串型字段描述符**
 
-| 描述符     | 描述                   |
-| :---       | :---                   |
-| `not null` | 不为null               |
-| `null`     | 空字符或者null         |
-| `eq`        | 精确匹配. 默认可以不写 |
+| 描述符 | 描述 |
+| :--- | :--- |
+| `not null` | 不为null |
+| `null` | 空字符或者null |
+| `eq` | 精确匹配. 默认可以不写 |
 
 
 **注册项数据校验格式**
@@ -396,7 +407,7 @@ SegmentB的Span校验数据格式如下：
    peerId: eq 0
    refs:
    - {parentSpanId: 1, parentTraceSegmentId: "${httpclient-case[0]}", entryServiceName: "/httpclient-case/case/httpclient", networkAddress: "127.0.0.1:8080",parentServiceName: "/httpclient-case/case/httpclient",entryApplicationInstanceId: nq 0 }
-```                                                                            
+```
 
 ### III. startup.sh
 
@@ -434,3 +445,109 @@ java -jar ${agent_opts} "-Dskywalking.agent.service_name=jettyclient-scenario"  
 **参考文件**
 * [undertow](https://github.com/apache/skywalking/blob/master/test/plugin/scenarios/undertow-scenario/bin/startup.sh)
 * [webflux](https://github.com/apache/skywalking/blob/master/test/plugin/scenarios/webflux-scenario/webflux-dist/bin/startup.sh)
+
+
+### 编写用例代码
+pom.xml最佳实践:
+1. 测试框架的版本号设置为属性变量
+```xml
+<test.framework.version>9.0.0.v20130308</test.framework.version>
+
+<dependency>
+    <groupId>org.apache.httpcomponents</groupId>
+    <artifactId>httpclient</artifactId>
+    <version>${test.framework.version}</version>
+</dependency>
+```
+具体请参考[配置]
+
+
+### 如何做心跳检查
+
+心跳检查是为了感知服务的可用状态，即探针已经激活并完成服务注册以及插件已经初始化。建议并推荐，用例在检查心跳时，先做依赖服务的状态验证。在所有依赖服务的状态验证后，若验证通过需返回`HTTP StatusCode=200`。框架以HTTP状态码`200`作为唯一的成功的信号。
+
+
+> 注意，由于心跳检查可能会发生多次请求，从而产生多个心跳检查的Segemnt，因此SegmentSize也不再是确定的值（建议使用`ge`符号）。此外，请不要将心跳检查的segment登记在期望数据文件上。
+
+例如：
+```yaml
+registryItems:
+  applications:
+    - {canal-scenario: 2}
+  instances:
+    - {canal-scenario: 1}
+  operationNames:
+    - canal-scenario: [Canal/example, /canal-scenario/case/canal-case]
+  heartbeat: []
+segmentItems:
+  - applicationCode: canal-scenario
+    segmentSize: ge 2
+    segments:
+      - segmentId: not null
+        spans:
+          - operationName: Canal/example
+...
+```
+
+## 本地测试和准备提交
+
+
+本地测试过程主要两步部分，首先是验证工程可以通过编译，工程目录结构正确，能够部署。开发者在集成测试之前可以先检查脚本是否能够在linux/macos上正常运行，其次entryService/healthcheck接口是否都能正常访问。
+
+然后通过以下命令进行集成测试：
+
+```bash
+cd ${SKYWALKING_HOME}
+bash ./test/pugin/run.sh -f ${scenario_name}
+```
+
+**注意**，如果更新了`./apm-sniffer`目录下的代码，需要重新编译`skywalking-agent`。因为当`skywalking-agent`目录存在时，不会重新编译。
+
+可以通过`${SKYWALKING_HOME}/test/plugin/run.sh -h`了解其所有用法，
+
+
+
+
+### 准备提交
+
+在完成调试之后，开始配置JenkinsFile。如下是JenkinsFile的规则和要求，现在我们有三个JenkinsFile用来配置插件测试任务，分别是`jenkinsfile-agent-test`、`jenkinsfile-agent-test-2`和`jenkinsfile-agent-test-3`三个文件。每个文件分成两组，一共6组并行运行。原则上，希望所有的组能够尽可能同时结束，因此用例加在运行时间比较短的分组上即可。
+
+示例，
+
+```
+stage('Test Cases Report (15)') { # 15=12+3 统计两个分组总共有多少个版本
+    steps {
+        echo "reserve."
+    }
+}
+
+stage('Run Agent Plugin Tests') {
+    when {
+        expression {
+            return sh(returnStatus: true, script: 'bash tools/ci/agent-build-condition.sh')
+        }
+    }
+    parallel {
+        stage('Group1') {
+            stages {
+                stage('spring-cloud-gateway 2.1.x (3)') { # 此任务一共有多少个版本
+                    steps {
+                        sh 'bash test/plugin/run.sh gateway-scenario'
+                    }
+                }
+            }
+            ...
+        }
+        stage('Group2') {
+            stages {
+                stage('solrj 7.x (12)') { # 此任务一共有多少个版本
+                    steps {
+                        sh 'bash test/plugin/run.sh solrj-7.x-scenario'
+                    }
+                }
+            }
+            ...
+        }
+    }
+}
+```
